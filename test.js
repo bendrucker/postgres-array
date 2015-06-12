@@ -1,6 +1,7 @@
 'use strict'
 
 var test = require('tape')
+var ap = require('ap')
 var array = require('./')
 
 test(function (t) {
@@ -11,6 +12,9 @@ test(function (t) {
   t.deepEqual(string('{a,b,c}'), ['a', 'b', 'c'], 'strings')
   t.deepEqual(string('{"\\"\\"\\"","\\\\\\\\\\\\"}'), ['"""', '\\\\\\'], 'escaped')
   t.deepEqual(string('{NULL,NULL}'), [null, null], 'null')
+
+  var integer = ap.partialRight(array.parse, ap.partialRight(parseInt, 10))
+  t.deepEqual(integer('{1,2,3}'), [1, 2, 3], 'numerics')
 
   t.end()
 })
