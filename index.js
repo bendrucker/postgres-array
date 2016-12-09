@@ -42,7 +42,13 @@ ArrayParser.prototype.newEntry = function (includeEmpty) {
     if (entry === 'NULL' && !includeEmpty) {
       entry = null
     }
-    if (entry !== null) entry = this.transform(entry)
+    if (entry === 'true') {
+      entry = true
+    }
+    if(entry === 'false'){
+      entry = false;
+    }
+    if (entry !== null && entry !== true && entry !== false) entry = this.transform(entry)
     this.entries.push(entry)
     this.recorded = []
   }
