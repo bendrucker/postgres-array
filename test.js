@@ -10,6 +10,7 @@ test(function (t) {
   t.deepEqual(string('{""}'), [''], 'empty string')
   t.deepEqual(string('{1,2,3}'), ['1', '2', '3'], 'numerics')
   t.deepEqual(string('{a,b,c}'), ['a', 'b', 'c'], 'strings')
+  t.deepEqual(string('{true,false,true}'), [true, false, true], 'booleans')
   t.deepEqual(string('{"\\"\\"\\"","\\\\\\\\\\\\"}'), ['"""', '\\\\\\'], 'escaped')
   t.deepEqual(string('{NULL,NULL}'), [null, null], 'null')
 
