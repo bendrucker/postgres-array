@@ -16,6 +16,7 @@
   "scripts": {
     "test": "standard && tape test.js"
   },
+  "types": "index.d.ts",
   "keywords": [
     "postgres",
     "array",
@@ -29,6 +30,7 @@
   },
   "files": [
     "index.js",
+    "index.d.ts",
     "readme.md"
   ]
 }
