@@ -15,6 +15,7 @@ test(function (t) {
 
   var integer = ap.partialRight(array.parse, ap.partialRight(parseInt, 10))
   t.deepEqual(integer('{1,2,3}'), [1, 2, 3], 'numerics')
+  t.deepEqual(integer('[0:2]={1,2,3}'), [1, 2, 3], 'numerics')
 
   t.end()
 })
