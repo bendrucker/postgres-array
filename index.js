@@ -48,8 +48,18 @@ ArrayParser.prototype.newEntry = function (includeEmpty) {
   }
 }
 
+ArrayParser.prototype.skipPrefix = function() {
+  if (this.source[0] === "[") {
+    while (!this.isEof()) {
+      var char = this.nextCharacter()
+      if (char.value === "=") break
+    }
+  }
+}
+
 ArrayParser.prototype.parse = function (nested) {
   var character, parser, quote
+  this.skipPrefix()
   while (!this.isEof()) {
     character = this.nextCharacter()
     if (character.value === '{' && !quote) {
