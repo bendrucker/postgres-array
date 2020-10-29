@@ -1,10 +1,10 @@
 'use strict'
 
-var test = require('tape')
-var array = require('./')
+const test = require('tape')
+const array = require('./')
 
 test(function (t) {
-  var string = array.parse
+  const string = array.parse
   t.deepEqual(string('{}'), [], 'empty')
   t.deepEqual(string('{""}'), [''], 'empty string')
   t.deepEqual(string('{1,2,3}'), ['1', '2', '3'], 'numerics')
