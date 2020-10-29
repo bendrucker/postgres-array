@@ -6,16 +6,16 @@
 ## Install
 
 ```
-$ npm install --save postgres-array
+npm install --save postgres-array
 ```
 
 
 ## Usage
 
 ```js
-var postgresArray = require('postgres-array')
+const { parse } = require('postgres-array')
 
-postgresArray.parse('{1,2,3}', (value) => parseInt(value, 10))
+parse('{1,2,3}', (value) => parseInt(value, 10))
 //=> [1, 2, 3]
 ```
 
