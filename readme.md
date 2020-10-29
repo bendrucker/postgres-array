@@ -1,4 +1,4 @@
-# postgres-array [![Build Status](https://travis-ci.org/bendrucker/postgres-array.svg?branch=master)](https://travis-ci.org/bendrucker/postgres-array) [![Greenkeeper badge](https://badges.greenkeeper.io/bendrucker/postgres-array.svg)](https://greenkeeper.io/)
+# postgres-array [![tests](https://github.com/bendrucker/postgres-array/workflows/tests/badge.svg)](https://github.com/bendrucker/postgres-array/actions?query=workflow%3Atests)
 
 > Parse postgres array columns
 
