@@ -19,7 +19,7 @@ class ArrayParser {
   }
 
   nextCharacter () {
-    var character = this.source[this.position++]
+    const character = this.source[this.position++]
     if (character === '\\') {
       return {
         value: this.source[this.position++],
@@ -37,7 +37,7 @@ class ArrayParser {
   }
 
   newEntry (includeEmpty) {
-    var entry
+    let entry
     if (this.recorded.length > 0 || includeEmpty) {
       entry = this.recorded.join('')
       if (entry === 'NULL' && !includeEmpty) {
@@ -52,14 +52,14 @@ class ArrayParser {
   consumeDimensions () {
     if (this.source[0] === '[') {
       while (!this.isEof()) {
-        var char = this.nextCharacter()
+        const char = this.nextCharacter()
         if (char.value === '=') break
       }
     }
   }
 
   parse (nested) {
-    var character, parser, quote
+    let character, parser, quote
     this.consumeDimensions()
     while (!this.isEof()) {
       character = this.nextCharacter()
