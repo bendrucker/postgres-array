@@ -1,97 +1,89 @@
 'use strict'
 
 exports.parse = function (source, transform) {
-  return new ArrayParser(source, transform).parse()
+  return parsePostgresArray(source, transform)
 }
 
-class ArrayParser {
-  constructor (source, transform) {
-    this.source = source
-    this.transform = transform || identity
-    this.position = 0
-    this.entries = []
-    this.recorded = []
-    this.dimension = 0
-  }
+function parsePostgresArray (source, transform, nested = false) {
+  let character = ''
+  let quote = false
+  let position = 0
+  let dimension = 0
+  const entries = []
+  let recorded = ''
 
-  isEof () {
-    return this.position >= this.source.length
-  }
+  const newEntry = function (includeEmpty) {
+    let entry = recorded
 
-  nextCharacter () {
-    const character = this.source[this.position++]
-    if (character === '\\') {
-      return {
-        value: this.source[this.position++],
-        escaped: true
-      }
-    }
-    return {
-      value: character,
-      escaped: false
-    }
-  }
-
-  record (character) {
-    this.recorded.push(character)
-  }
-
-  newEntry (includeEmpty) {
-    let entry
-    if (this.recorded.length > 0 || includeEmpty) {
-      entry = this.recorded.join('')
+    if (entry.length > 0 || includeEmpty) {
       if (entry === 'NULL' && !includeEmpty) {
         entry = null
       }
-      if (entry !== null) entry = this.transform(entry)
-      this.entries.push(entry)
-      this.recorded = []
-    }
-  }
 
-  consumeDimensions () {
-    if (this.source[0] === '[') {
-      while (!this.isEof()) {
-        const char = this.nextCharacter()
-        if (char.value === '=') break
+      if (entry !== null && transform) {
+        entry = transform(entry)
       }
+
+      entries.push(entry)
+      recorded = ''
     }
   }
 
-  parse (nested) {
-    let character, parser, quote
-    this.consumeDimensions()
-    while (!this.isEof()) {
-      character = this.nextCharacter()
-      if (character.value === '{' && !quote) {
-        this.dimension++
-        if (this.dimension > 1) {
-          parser = new ArrayParser(this.source.substr(this.position - 1), this.transform)
-          this.entries.push(parser.parse(true))
-          this.position += parser.position - 2
-        }
-      } else if (character.value === '}' && !quote) {
-        this.dimension--
-        if (!this.dimension) {
-          this.newEntry()
-          if (nested) return this.entries
-        }
-      } else if (character.value === '"' && !character.escaped) {
-        if (quote) this.newEntry(true)
-        quote = !quote
-      } else if (character.value === ',' && !quote) {
-        this.newEntry()
-      } else {
-        this.record(character.value)
+  if (source[0] === '[') {
+    while (position < source.length) {
+      const char = source[position++]
+
+      if (char === '=') { break }
+    }
+  }
+
+  while (position < source.length) {
+    let escaped = false
+    character = source[position++]
+
+    if (character === '\\') {
+      character = source[position++]
+      escaped = true
+    }
+
+    if (character === '{' && !quote) {
+      dimension++
+
+      if (dimension > 1) {
+        const parser = parsePostgresArray(source.substr(position - 1), transform, true)
+
+        entries.push(parser.entries)
+        position += parser.position - 2
       }
-    }
-    if (this.dimension !== 0) {
-      throw new Error('array dimension not balanced')
-    }
-    return this.entries
-  }
-}
+    } else if (character === '}' && !quote) {
+      dimension--
 
-function identity (value) {
-  return value
+      if (!dimension) {
+        newEntry()
+
+        if (nested) {
+          return {
+            entries,
+            position
+          }
+        }
+      }
+    } else if (character === '"' && !escaped) {
+      if (quote) {
+        newEntry(true)
+      }
+
+      quote = !quote
+    } else if (character === ',' && !quote) {
+      newEntry()
+    } else {
+      recorded += character
+    }
+  }
+
+  if (dimension !== 0) {
+    throw new Error('array dimension not balanced')
+  }
+
+  return entries
 }
