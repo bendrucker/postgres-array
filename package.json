@@ -22,7 +22,6 @@
     "array",
     "parser"
   ],
-  "dependencies": {},
   "devDependencies": {
     "standard": "^17.0.0",
     "tape": "^5.0.0"
@@ -31,5 +30,12 @@
     "index.js",
     "index.d.ts",
     "readme.md"
-  ]
+  ],
+  "dependencies": {
+    "benchmark": "^2.1.4",
+    "cli-table": "^0.3.11",
+    "execa": "^6.0.0",
+    "jest-measure": "^0.0.14",
+    "node-machine-id": "^1.1.12"
+  }
 }

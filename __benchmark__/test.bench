@@ -1,0 +1,1 @@
+[{"name":"your test name","metrics":{"load-time":{"mean":52.83994419999999,"error":0.9745465468207575,"runs":10,"totalTime":528.3994419999999,"min":50.914933,"max":55.758662,"difference":-0.4886257298156399}}}]
