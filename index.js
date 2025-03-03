@@ -21,20 +21,20 @@ exports.parse = function (source, transform) {
   let position = 0
   if (source[position] === LBRACKET) {
     position = source.indexOf(EQUALS) + 1
-    if (position === 0) {
-      throw new Error('Invalid array text, array indexes not understood')
-    }
+    if (position === 0) throw new Error('invalid array text - bad indicies')
   }
 
   if (source[position++] !== LBRACE) {
-    throw new Error('Invalid array text - must start with {')
+    throw new Error('invalid array text - missing lbrace')
   }
+
   const rbraceIndex = source.length - 1
   if (source[rbraceIndex] !== RBRACE) {
-    throw new Error('Invalid array text - must end with }')
+    throw new Error('invalid array text - missing rbrace')
   }
-  const output = []
-  let current = output
+
+  const entries = []
+  let current = entries
   const stack = []
 
   let currentStringStart = position
@@ -91,8 +91,9 @@ exports.parse = function (source, transform) {
       mode = EXPECT_DELIM
       const arr = stack.pop()
       if (arr === undefined) {
-        throw new Error('Invalid array text - too many \'}\'')
+        throw new Error('array dimension not balanced')
       }
+
       current = arr
     } else if (mode === EXPECT_VALUE) {
       currentStringStart = position
@@ -100,18 +101,17 @@ exports.parse = function (source, transform) {
     } else if (mode === SIMPLE_VALUE) {
       continue
     } else if (mode === EXPECT_DELIM) {
-      throw new Error('Was expecting delimeter')
+      throw new Error('expected delimeter')
     } else {
-      const never = mode
-      throw new Error(`Was not expecting to be in mode ${never}`)
+      throw new Error('unexpected mode')
     }
   }
 
   delim()
 
   if (stack.length !== 0) {
-    throw new Error('Invalid array text - mismatched braces')
+    throw new Error('array dimension not balanced')
   }
 
-  return output
+  return entries
 }
