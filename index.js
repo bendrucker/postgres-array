@@ -1,89 +1,117 @@
 'use strict'
 
+const BACKSLASH = '\\'
+const DQUOT = '"'
+const LBRACE = '{'
+const RBRACE = '}'
+const LBRACKET = '['
+const EQUALS = '='
+const COMMA = ','
+
+/** When the raw value is this, it means a literal `null` */
+const NULL_STRING = 'NULL'
+
+const EXPECT_VALUE = 0
+const SIMPLE_VALUE = 1
+const QUOTED_VALUE = 2
+const EXPECT_DELIM = 3
+
 exports.parse = function (source, transform) {
-  return parsePostgresArray(source, transform)
-}
-
-function parsePostgresArray (source, transform, nested = false) {
-  let character = ''
-  let quote = false
+  // If starts with `[`, it is specifying the index boundas. Skip past first `=`.
   let position = 0
-  let dimension = 0
-  const entries = []
-  let recorded = ''
-
-  const newEntry = function (includeEmpty) {
-    let entry = recorded
-
-    if (entry.length > 0 || includeEmpty) {
-      if (entry === 'NULL' && !includeEmpty) {
-        entry = null
-      }
-
-      if (entry !== null && transform) {
-        entry = transform(entry)
-      }
-
-      entries.push(entry)
-      recorded = ''
+  if (source[position] === LBRACKET) {
+    position = source.indexOf(EQUALS) + 1
+    if (position === 0) {
+      throw new Error('Invalid array text, array indexes not understood')
     }
   }
 
-  if (source[0] === '[') {
-    while (position < source.length) {
-      const char = source[position++]
+  if (source[position++] !== LBRACE) {
+    throw new Error('Invalid array text - must start with {')
+  }
+  const rbraceIndex = source.length - 1
+  if (source[rbraceIndex] !== RBRACE) {
+    throw new Error('Invalid array text - must end with }')
+  }
+  const output = []
+  let current = output
+  const stack = []
 
-      if (char === '=') { break }
+  let currentStringStart = position
+  const currentStringParts = []
+  let mode = EXPECT_VALUE
+  const haveTransform = transform != null
+
+  function delim () {
+    if (mode === SIMPLE_VALUE) {
+      const part = source.slice(currentStringStart, position)
+      current.push(
+        part === NULL_STRING ? null : haveTransform ? transform(part) : part
+      )
     }
   }
 
-  while (position < source.length) {
-    let escaped = false
-    character = source[position++]
-
-    if (character === '\\') {
-      character = source[position++]
-      escaped = true
-    }
-
-    if (character === '{' && !quote) {
-      dimension++
-
-      if (dimension > 1) {
-        const parser = parsePostgresArray(source.substr(position - 1), transform, true)
-
-        entries.push(parser.entries)
-        position += parser.position - 2
-      }
-    } else if (character === '}' && !quote) {
-      dimension--
-
-      if (!dimension) {
-        newEntry()
-
-        if (nested) {
-          return {
-            entries,
-            position
-          }
+  for (; position < rbraceIndex; position++) {
+    const char = source[position]
+    if (mode === QUOTED_VALUE) {
+      if (char === BACKSLASH) {
+        // We contain escaping, so we have to do it the slow way
+        const part = source.slice(currentStringStart, position)
+        currentStringParts.push(part)
+        currentStringStart = ++position
+      } else if (char === DQUOT) {
+        const part = source.slice(currentStringStart, position)
+        if (currentStringParts.length > 0) {
+          const final = currentStringParts.join('') + part
+          current.push(haveTransform ? transform(final) : final)
+          currentStringParts.length = 0
+        } else {
+          current.push(haveTransform ? transform(part) : part)
         }
+        mode = EXPECT_DELIM
+      } else {
+        continue
       }
-    } else if (character === '"' && !escaped) {
-      if (quote) {
-        newEntry(true)
+    } else if (char === DQUOT) {
+      // It's escaped
+      mode = QUOTED_VALUE
+      currentStringStart = position + 1
+    } else if (char === LBRACE) {
+      const newArray = []
+      current.push(newArray)
+      stack.push(current)
+      current = newArray
+      currentStringStart = position + 1
+      mode = EXPECT_VALUE
+    } else if (char === COMMA) {
+      delim()
+      mode = EXPECT_VALUE
+    } else if (char === RBRACE) {
+      delim()
+      mode = EXPECT_DELIM
+      const arr = stack.pop()
+      if (arr === undefined) {
+        throw new Error('Invalid array text - too many \'}\'')
       }
-
-      quote = !quote
-    } else if (character === ',' && !quote) {
-      newEntry()
+      current = arr
+    } else if (mode === EXPECT_VALUE) {
+      currentStringStart = position
+      mode = SIMPLE_VALUE
+    } else if (mode === SIMPLE_VALUE) {
+      continue
+    } else if (mode === EXPECT_DELIM) {
+      throw new Error('Was expecting delimeter')
     } else {
-      recorded += character
+      const never = mode
+      throw new Error(`Was not expecting to be in mode ${never}`)
     }
   }
 
-  if (dimension !== 0) {
-    throw new Error('array dimension not balanced')
+  delim()
+
+  if (stack.length !== 0) {
+    throw new Error('Invalid array text - mismatched braces')
   }
 
-  return entries
+  return output
 }
