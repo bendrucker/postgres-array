@@ -9,7 +9,7 @@ const WORDS = [
   'WORLD',
   '"' + 'Mixed \\"content\\"'.repeat(100) + '"',
   '1984',
-  String(Math.MAX_SAFE_INTEGER),
+  String(Number.MAX_SAFE_INTEGER),
   '""',
   '"{}"',
   '"' +
