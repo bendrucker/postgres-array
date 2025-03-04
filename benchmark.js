@@ -17,6 +17,19 @@ const WORDS = [
     '"'
 ]
 
+/**
+ * V8 strings are often created as "ropes"; however when we receive data from
+ * the database it won't be a rope but a flattened string. Thus to benchmark
+ * fairly, we must operate on flattened strings.
+ *
+ * @see {@link https://github.com/davidmarkclements/flatstr/blob/master/index.js}
+ */
+function flattenString (str) {
+  // eslint-disable-next-line no-unused-expressions
+  str | 0
+  return str
+}
+
 for (let i = 0; i < 1000; i++) {
   const parts = []
   for (let j = 100; j < 500; j++) {
@@ -26,7 +39,7 @@ for (let i = 0; i < 1000; i++) {
     }
     parts.push('{' + innerParts.join(',') + '}')
   }
-  arraysToParse.push('{' + parts.join(',') + '}')
+  arraysToParse.push(flattenString('{' + parts.join(',') + '}'))
 }
 for (let i = 0; i < 1000; i++) {
   const parts = []
