@@ -11,10 +11,6 @@ const COMMA = ','
 /** When the raw value is this, it means a literal `null` */
 const NULL_STRING = 'NULL'
 
-const EXPECT_VALUE = 0
-const SIMPLE_VALUE = 1
-const EXPECT_DELIM = 3
-
 /**
  * Parses an array according to
  * https://www.postgresql.org/docs/17/arrays.html#ARRAYS-IO
@@ -44,7 +40,7 @@ function makeParseArrayWithTransform (transform) {
     let currentStringStart = position
     const currentStringParts = []
     let hasStringParts = false
-    let mode = EXPECT_VALUE
+    let expectValue = true
 
     for (; position < rbraceIndex; ++position) {
       const char = str[position]
@@ -80,66 +76,48 @@ function makeParseArrayWithTransform (transform) {
         } else {
           current.push(haveTransform ? transform(part) : part)
         }
-        mode = EXPECT_DELIM
+        expectValue = false
       } else if (char === LBRACE) {
         const newArray = []
         current.push(newArray)
         stack.push(current)
         current = newArray
         currentStringStart = position + 1
-        mode = EXPECT_VALUE
+        expectValue = true
       } else if (char === COMMA) {
-        // delim();
-        if (mode === SIMPLE_VALUE) {
-          const part = str.slice(currentStringStart, position)
-          current.push(
-            part === NULL_STRING
-              ? null
-              : haveTransform
-                ? transform(part)
-                : part
-          )
-        }
-
-        mode = EXPECT_VALUE
+        expectValue = true
       } else if (char === RBRACE) {
-        // delim();
-        if (mode === SIMPLE_VALUE) {
-          const part = str.slice(currentStringStart, position)
-          current.push(
-            part === NULL_STRING
-              ? null
-              : haveTransform
-                ? transform(part)
-                : part
-          )
-        }
-
-        mode = EXPECT_DELIM
+        expectValue = false
         const arr = stack.pop()
         if (arr === undefined) {
           throw new Error("Invalid array text - too many '}'")
         }
         current = arr
-      } else if (mode === EXPECT_VALUE) {
+      } else if (expectValue) {
         currentStringStart = position
-        mode = SIMPLE_VALUE
-      } else if (mode === SIMPLE_VALUE) {
-        continue
-      } else if (mode === EXPECT_DELIM) {
-        throw new Error('Was expecting delimeter')
+        const comma = str.indexOf(COMMA, currentStringStart)
+        const rbrace = str.indexOf(RBRACE, currentStringStart)
+        if (comma === -1) {
+          if (rbrace === -1) {
+            position = rbraceIndex
+          } else {
+            position = rbrace
+          }
+        } else {
+          if (rbrace === -1) {
+            position = comma
+          } else {
+            position = Math.min(comma, rbrace)
+          }
+        }
+        const part = str.slice(currentStringStart, position--)
+        current.push(
+          part === NULL_STRING ? null : haveTransform ? transform(part) : part
+        )
+        expectValue = false
       } else {
-        const never = mode
-        throw new Error(`Was not expecting to be in mode ${never}`)
+        throw new Error('Was expecting delimeter')
       }
-    }
-
-    // delim();
-    if (mode === SIMPLE_VALUE) {
-      const part = str.slice(currentStringStart, position)
-      current.push(
-        part === NULL_STRING ? null : haveTransform ? transform(part) : part
-      )
     }
 
     return output
