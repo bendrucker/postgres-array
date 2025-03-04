@@ -13,116 +13,160 @@ const NULL_STRING = 'NULL'
 
 const EXPECT_VALUE = 0
 const SIMPLE_VALUE = 1
-const QUOTED_VALUE = 2
 const EXPECT_DELIM = 3
 
-exports.parse = function (source, transform) {
-  // If starts with `[`, it is specifying the index boundas. Skip past first `=`.
-  let position = 0
-  if (source[position] === LBRACKET) {
-    position = source.indexOf(EQUALS) + 1
-    if (position === 0) throw new Error('invalid array text - bad indicies')
-  }
-
-  if (source[position++] !== LBRACE) {
-    throw new Error('invalid array text - missing lbrace')
-  }
-
-  const rbraceIndex = source.length - 1
-  if (source[rbraceIndex] !== RBRACE) {
-    throw new Error('invalid array text - missing rbrace')
-  }
-
-  const entries = []
-  let current = entries
-  const stack = []
-
-  let currentStringStart = position
-  const currentStringParts = []
-  let mode = EXPECT_VALUE
+/**
+ * Parses an array according to
+ * https://www.postgresql.org/docs/17/arrays.html#ARRAYS-IO
+ *
+ * Trusts the data (mostly), so only hook up to trusted Postgres servers.
+ */
+function makeParseArrayWithTransform (transform) {
   const haveTransform = transform != null
-
-  for (; position < rbraceIndex; position++) {
-    const char = source[position]
-    if (mode === QUOTED_VALUE) {
-      if (char === BACKSLASH) {
-        // We contain escaping, so we have to do it the slow way
-        const part = source.slice(currentStringStart, position)
-        currentStringParts.push(part)
-        currentStringStart = ++position
-      } else if (char === DQUOT) {
-        const part = source.slice(currentStringStart, position)
-        if (currentStringParts.length > 0) {
-          const final = currentStringParts.join('') + part
-          current.push(haveTransform ? transform(final) : final)
-          currentStringParts.length = 0
-        } else {
-          current.push(haveTransform ? transform(part) : part)
-        }
-        mode = EXPECT_DELIM
-      } else {
-        continue
-      }
-    } else if (char === DQUOT) {
-      // It's escaped
-      mode = QUOTED_VALUE
-      currentStringStart = position + 1
-    } else if (char === LBRACE) {
-      const newArray = []
-      current.push(newArray)
-      stack.push(current)
-      current = newArray
-      currentStringStart = position + 1
-      mode = EXPECT_VALUE
-    } else if (char === COMMA) {
-      // delim()
-      if (mode === SIMPLE_VALUE) {
-        const part = source.slice(currentStringStart, position)
-        current.push(
-          part === NULL_STRING ? null : haveTransform ? transform(part) : part
-        )
-      }
-
-      mode = EXPECT_VALUE
-    } else if (char === RBRACE) {
-      // delim()
-      if (mode === SIMPLE_VALUE) {
-        const part = source.slice(currentStringStart, position)
-        current.push(
-          part === NULL_STRING ? null : haveTransform ? transform(part) : part
-        )
-      }
-
-      mode = EXPECT_DELIM
-      const arr = stack.pop()
-      if (arr === undefined) {
-        throw new Error('array dimension not balanced')
-      }
-
-      current = arr
-    } else if (mode === EXPECT_VALUE) {
-      currentStringStart = position
-      mode = SIMPLE_VALUE
-    } else if (mode === SIMPLE_VALUE) {
-      continue
-    } else if (mode === EXPECT_DELIM) {
-      throw new Error('expected delimeter')
-    } else {
-      throw new Error('unexpected mode')
+  return function parseArray (str) {
+    // If starts with `[`, it is specifying the index boundas. Skip past first `=`.
+    let position = 0
+    if (str[position] === LBRACKET) {
+      position = str.indexOf(EQUALS) + 1
     }
-  }
 
-  // delim()
-  if (mode === SIMPLE_VALUE) {
-    const part = source.slice(currentStringStart, position)
-    current.push(
-      part === NULL_STRING ? null : haveTransform ? transform(part) : part
-    )
-  }
+    if (str[position++] !== LBRACE) {
+      throw new Error('Invalid array text - must start with {')
+    }
+    const rbraceIndex = str.length - 1
+    if (str[rbraceIndex] !== RBRACE) {
+      throw new Error('Invalid array text - must end with }')
+    }
+    const output = []
+    let current = output
+    const stack = []
 
-  if (stack.length !== 0) {
-    throw new Error('array dimension not balanced')
-  }
+    let currentStringStart = position
+    const currentStringParts = []
+    let hasStringParts = false
+    let mode = EXPECT_VALUE
 
-  return entries
+    for (; position < rbraceIndex; ++position) {
+      const char = str[position]
+      // > The array output routine will put double quotes around element values if
+      // > they are empty strings, contain curly braces, delimiter characters, double
+      // > quotes, backslashes, or white space, or match the word NULL. Double quotes
+      // > and backslashes embedded in element values will be backslash-escaped.
+      switch (char) {
+        case DQUOT: {
+          // It's escaped
+          currentStringStart = ++position
+          let dquot = str.indexOf(DQUOT, currentStringStart)
+          let backSlash = str.indexOf(BACKSLASH, currentStringStart)
+          while (backSlash !== -1 && backSlash < dquot) {
+            position = backSlash
+            const part = str.slice(currentStringStart, position)
+            currentStringParts.push(part)
+            hasStringParts = true
+            currentStringStart = ++position
+            if (dquot === position++) {
+              // This was an escaped doublequote; find the next one!
+              dquot = str.indexOf(DQUOT, position)
+            }
+            // Either way, find the next backslash
+            backSlash = str.indexOf(BACKSLASH, position)
+          }
+          position = dquot
+          const part = str.slice(currentStringStart, position)
+          if (hasStringParts) {
+            const final = currentStringParts.join('') + part
+            current.push(haveTransform ? transform(final) : final)
+            currentStringParts.length = 0
+            hasStringParts = false
+          } else {
+            current.push(haveTransform ? transform(part) : part)
+          }
+          mode = EXPECT_DELIM
+          break
+        }
+        case LBRACE: {
+          const newArray = []
+          current.push(newArray)
+          stack.push(current)
+          current = newArray
+          currentStringStart = position + 1
+          mode = EXPECT_VALUE
+          break
+        }
+        case COMMA: {
+          // delim();
+          if (mode === SIMPLE_VALUE) {
+            const part = str.slice(currentStringStart, position)
+            current.push(
+              part === NULL_STRING
+                ? null
+                : haveTransform
+                  ? transform(part)
+                  : part
+            )
+          }
+
+          mode = EXPECT_VALUE
+          break
+        }
+        case RBRACE: {
+          // delim();
+          if (mode === SIMPLE_VALUE) {
+            const part = str.slice(currentStringStart, position)
+            current.push(
+              part === NULL_STRING
+                ? null
+                : haveTransform
+                  ? transform(part)
+                  : part
+            )
+          }
+
+          mode = EXPECT_DELIM
+          const arr = stack.pop()
+          if (arr === undefined) {
+            throw new Error('Invalid array text - too many \'}\'')
+          }
+          current = arr
+          break
+        }
+        default: {
+          switch (mode) {
+            case EXPECT_VALUE: {
+              currentStringStart = position
+              mode = SIMPLE_VALUE
+              break
+            }
+            case SIMPLE_VALUE: {
+              continue
+            }
+            case EXPECT_DELIM: {
+              throw new Error('Was expecting delimeter')
+            }
+            default: {
+              const never = mode
+              throw new Error(`Was not expecting to be in mode ${never}`)
+            }
+          }
+        }
+      }
+    }
+
+    // delim();
+    if (mode === SIMPLE_VALUE) {
+      const part = str.slice(currentStringStart, position)
+      current.push(
+        part === NULL_STRING ? null : haveTransform ? transform(part) : part
+      )
+    }
+
+    return output
+  }
 }
+
+const parseArray = makeParseArrayWithTransform()
+
+exports.parse = (source, transform) =>
+  transform
+    ? makeParseArrayWithTransform(transform)(source)
+    : parseArray(source)
