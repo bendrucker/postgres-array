@@ -43,7 +43,7 @@ function makeParseArrayWithTransform (transform) {
     let expectValue = true
 
     for (; position < rbraceIndex; ++position) {
-      const char = str[position]
+      let char = str[position]
       // > The array output routine will put double quotes around element values if
       // > they are empty strings, contain curly braces, delimiter characters, double
       // > quotes, backslashes, or white space, or match the word NULL. Double quotes
@@ -95,11 +95,12 @@ function makeParseArrayWithTransform (transform) {
         current = arr
       } else if (expectValue) {
         currentStringStart = position
-        for (; position < rbraceIndex; ++position) {
-          const char = str[position]
-          if (char === COMMA || char === RBRACE) {
-            break
-          }
+        while (
+          (char = str[position]) !== COMMA &&
+          char !== RBRACE &&
+          position < rbraceIndex
+        ) {
+          ++position
         }
         const part = str.slice(currentStringStart, position--)
         current.push(
@@ -118,6 +119,6 @@ function makeParseArrayWithTransform (transform) {
 const parseArray = makeParseArrayWithTransform()
 
 exports.parse = (source, transform) =>
-  transform
+  transform != null
     ? makeParseArrayWithTransform(transform)(source)
     : parseArray(source)
