@@ -42,15 +42,6 @@ exports.parse = function (source, transform) {
   let mode = EXPECT_VALUE
   const haveTransform = transform != null
 
-  function delim () {
-    if (mode === SIMPLE_VALUE) {
-      const part = source.slice(currentStringStart, position)
-      current.push(
-        part === NULL_STRING ? null : haveTransform ? transform(part) : part
-      )
-    }
-  }
-
   for (; position < rbraceIndex; position++) {
     const char = source[position]
     if (mode === QUOTED_VALUE) {
@@ -84,10 +75,24 @@ exports.parse = function (source, transform) {
       currentStringStart = position + 1
       mode = EXPECT_VALUE
     } else if (char === COMMA) {
-      delim()
+      // delim()
+      if (mode === SIMPLE_VALUE) {
+        const part = source.slice(currentStringStart, position)
+        current.push(
+          part === NULL_STRING ? null : haveTransform ? transform(part) : part
+        )
+      }
+
       mode = EXPECT_VALUE
     } else if (char === RBRACE) {
-      delim()
+      // delim()
+      if (mode === SIMPLE_VALUE) {
+        const part = source.slice(currentStringStart, position)
+        current.push(
+          part === NULL_STRING ? null : haveTransform ? transform(part) : part
+        )
+      }
+
       mode = EXPECT_DELIM
       const arr = stack.pop()
       if (arr === undefined) {
@@ -107,7 +112,13 @@ exports.parse = function (source, transform) {
     }
   }
 
-  delim()
+  // delim()
+  if (mode === SIMPLE_VALUE) {
+    const part = source.slice(currentStringStart, position)
+    current.push(
+      part === NULL_STRING ? null : haveTransform ? transform(part) : part
+    )
+  }
 
   if (stack.length !== 0) {
     throw new Error('array dimension not balanced')
