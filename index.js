@@ -95,19 +95,10 @@ function makeParseArrayWithTransform (transform) {
         current = arr
       } else if (expectValue) {
         currentStringStart = position
-        const comma = str.indexOf(COMMA, currentStringStart)
-        const rbrace = str.indexOf(RBRACE, currentStringStart)
-        if (comma === -1) {
-          if (rbrace === -1) {
-            position = rbraceIndex
-          } else {
-            position = rbrace
-          }
-        } else {
-          if (rbrace === -1) {
-            position = comma
-          } else {
-            position = Math.min(comma, rbrace)
+        for (; position < rbraceIndex; ++position) {
+          const char = str[position]
+          if (char === COMMA || char === RBRACE) {
+            break
           }
         }
         const part = str.slice(currentStringStart, position--)
