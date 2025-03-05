@@ -1,89 +1,124 @@
 'use strict'
 
-exports.parse = function (source, transform) {
-  return parsePostgresArray(source, transform)
-}
+const BACKSLASH = '\\'
+const DQUOT = '"'
+const LBRACE = '{'
+const RBRACE = '}'
+const LBRACKET = '['
+const EQUALS = '='
+const COMMA = ','
 
-function parsePostgresArray (source, transform, nested = false) {
-  let character = ''
-  let quote = false
-  let position = 0
-  let dimension = 0
-  const entries = []
-  let recorded = ''
+/** When the raw value is this, it means a literal `null` */
+const NULL_STRING = 'NULL'
 
-  const newEntry = function (includeEmpty) {
-    let entry = recorded
-
-    if (entry.length > 0 || includeEmpty) {
-      if (entry === 'NULL' && !includeEmpty) {
-        entry = null
-      }
-
-      if (entry !== null && transform) {
-        entry = transform(entry)
-      }
-
-      entries.push(entry)
-      recorded = ''
-    }
-  }
-
-  if (source[0] === '[') {
-    while (position < source.length) {
-      const char = source[position++]
-
-      if (char === '=') { break }
-    }
-  }
-
-  while (position < source.length) {
-    let escaped = false
-    character = source[position++]
-
-    if (character === '\\') {
-      character = source[position++]
-      escaped = true
+/**
+ * Parses an array according to
+ * https://www.postgresql.org/docs/17/arrays.html#ARRAYS-IO
+ *
+ * Trusts the data (mostly), so only hook up to trusted Postgres servers.
+ */
+function makeParseArrayWithTransform (transform) {
+  const haveTransform = transform != null
+  return function parseArray (str) {
+    // If starts with `[`, it is specifying the index boundas. Skip past first `=`.
+    let position = 0
+    if (str[position] === LBRACKET) {
+      position = str.indexOf(EQUALS) + 1
     }
 
-    if (character === '{' && !quote) {
-      dimension++
+    if (str[position++] !== LBRACE) {
+      throw new Error('Invalid array text - must start with {')
+    }
+    const rbraceIndex = str.length - 1
+    if (str[rbraceIndex] !== RBRACE) {
+      throw new Error('Invalid array text - must end with }')
+    }
+    const output = []
+    let current = output
+    const stack = []
 
-      if (dimension > 1) {
-        const parser = parsePostgresArray(source.substr(position - 1), transform, true)
+    let currentStringStart = position
+    const currentStringParts = []
+    let hasStringParts = false
+    let expectValue = true
 
-        entries.push(parser.entries)
-        position += parser.position - 2
-      }
-    } else if (character === '}' && !quote) {
-      dimension--
-
-      if (!dimension) {
-        newEntry()
-
-        if (nested) {
-          return {
-            entries,
-            position
+    for (; position < rbraceIndex; ++position) {
+      let char = str[position]
+      // > The array output routine will put double quotes around element values if
+      // > they are empty strings, contain curly braces, delimiter characters, double
+      // > quotes, backslashes, or white space, or match the word NULL. Double quotes
+      // > and backslashes embedded in element values will be backslash-escaped.
+      if (char === DQUOT) {
+        // It's escaped
+        currentStringStart = ++position
+        let dquot = str.indexOf(DQUOT, currentStringStart)
+        let backSlash = str.indexOf(BACKSLASH, currentStringStart)
+        while (backSlash !== -1 && backSlash < dquot) {
+          position = backSlash
+          const part = str.slice(currentStringStart, position)
+          currentStringParts.push(part)
+          hasStringParts = true
+          currentStringStart = ++position
+          if (dquot === position++) {
+            // This was an escaped doublequote; find the next one!
+            dquot = str.indexOf(DQUOT, position)
           }
+          // Either way, find the next backslash
+          backSlash = str.indexOf(BACKSLASH, position)
         }
+        position = dquot
+        const part = str.slice(currentStringStart, position)
+        if (hasStringParts) {
+          const final = currentStringParts.join('') + part
+          current.push(haveTransform ? transform(final) : final)
+          currentStringParts.length = 0
+          hasStringParts = false
+        } else {
+          current.push(haveTransform ? transform(part) : part)
+        }
+        expectValue = false
+      } else if (char === LBRACE) {
+        const newArray = []
+        current.push(newArray)
+        stack.push(current)
+        current = newArray
+        currentStringStart = position + 1
+        expectValue = true
+      } else if (char === COMMA) {
+        expectValue = true
+      } else if (char === RBRACE) {
+        expectValue = false
+        const arr = stack.pop()
+        if (arr === undefined) {
+          throw new Error("Invalid array text - too many '}'")
+        }
+        current = arr
+      } else if (expectValue) {
+        currentStringStart = position
+        while (
+          (char = str[position]) !== COMMA &&
+          char !== RBRACE &&
+          position < rbraceIndex
+        ) {
+          ++position
+        }
+        const part = str.slice(currentStringStart, position--)
+        current.push(
+          part === NULL_STRING ? null : haveTransform ? transform(part) : part
+        )
+        expectValue = false
+      } else {
+        throw new Error('Was expecting delimeter')
       }
-    } else if (character === '"' && !escaped) {
-      if (quote) {
-        newEntry(true)
-      }
-
-      quote = !quote
-    } else if (character === ',' && !quote) {
-      newEntry()
-    } else {
-      recorded += character
     }
-  }
 
-  if (dimension !== 0) {
-    throw new Error('array dimension not balanced')
+    return output
   }
-
-  return entries
 }
+
+const parseArray = makeParseArrayWithTransform()
+
+exports.parse = (source, transform) =>
+  transform != null
+    ? makeParseArrayWithTransform(transform)(source)
+    : parseArray(source)
