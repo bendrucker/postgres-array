@@ -1,7 +1,7 @@
 {
   "name": "postgres-array",
   "main": "index.js",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "Parse postgres array columns",
   "license": "MIT",
   "repository": "bendrucker/postgres-array",
