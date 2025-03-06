@@ -4,7 +4,10 @@
   "version": "3.0.4",
   "description": "Parse postgres array columns",
   "license": "MIT",
-  "repository": "bendrucker/postgres-array",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bendrucker/postgres-array.git"
+  },
   "author": {
     "name": "Ben Drucker",
     "email": "bvdrucker@gmail.com",
