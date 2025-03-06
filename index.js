@@ -42,7 +42,7 @@ function makeParseArrayWithTransform (transform) {
     const stack = []
 
     let currentStringStart = position
-    let currentString = null
+    let currentString = ''
     let expectValue = true
 
     for (; position < rbraceIndex; ++position) {
@@ -59,11 +59,7 @@ function makeParseArrayWithTransform (transform) {
         while (backSlash !== -1 && backSlash < dquot) {
           position = backSlash
           const part = str.slice(currentStringStart, position)
-          if (currentString === null) {
-            currentString = part
-          } else {
-            currentString += part
-          }
+          currentString += part
           currentStringStart = ++position
           if (dquot === position++) {
             // This was an escaped doublequote; find the next one!
@@ -74,13 +70,9 @@ function makeParseArrayWithTransform (transform) {
         }
         position = dquot
         const part = str.slice(currentStringStart, position)
-        if (currentString === null) {
-          current.push(haveTransform ? transform(part) : part)
-        } else {
-          currentString += part
-          current.push(haveTransform ? transform(currentString) : currentString)
-          currentString = null
-        }
+        currentString += part
+        current.push(haveTransform ? transform(currentString) : currentString)
+        currentString = ''
         expectValue = false
       } else if (char === LBRACE) {
         const newArray = []
